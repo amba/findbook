@@ -1,5 +1,4 @@
 #!/usr/bin/env perl
-# FIXME: was ist, wenn das gleiche file in zwei dirs liegt?
 use 5.014;
 use warnings;
 use strict;
@@ -28,7 +27,6 @@ my %format_hash;
 
 # parse commandline
 
-# FIXME: 'file' option für alternatives config file
 # FIXME: option für substring statt regex
 GetOptions ("viewer=s" => \$viewer,
 	    "all" => \$search_all_formats,
@@ -93,9 +91,6 @@ else {
     }
 }
 
-# FIXME
-# $_ = basename ($_) foreach @files;
-
 $_ = decode ('UTF-8', $_) foreach @files;
 
 # setup regexes
@@ -109,16 +104,30 @@ die "invalid regex: $@" if $@;
 # grep the list of filenames for each regexp
 
 foreach my $regex (@ARGV) {
-    # FIXME: only grep basename?
     @files = grep /$regex/, @files;
 }
 
 # present the list of matching files to the user
 
 die "error: no book found\n" if $#files == -1;
-# FIXME: check for duplicate basenames
-say "[$_] ", basename ($files[$_]) for (0..$#files); 
 
+# check for duplicate basenames
+my %duplicates;
+my $have_duplicates = 0;
+foreach (@files) {
+    if ($duplicates{basename ($_)}++) {
+	$have_duplicates = 1;
+	last;
+    }
+}
+
+if ($have_duplicates) {
+    
+    say "[$_] ", $files[$_] for (0..$#files); 
+}
+else {    
+    say "[$_] ", basename ($files[$_]) for (0..$#files); 
+}
 # get user input
 
 my $input;
@@ -156,7 +165,7 @@ sub system_wrapper {
 }
 
 sub state_usage {
-    say "Usage: $prog_name regex1 [regex2 ...]";
+    say "Usage: $prog_name [OPTIONS] regex1 [regex2 ...]";
 }
 
 sub state_help {
