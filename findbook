@@ -1,0 +1,204 @@
+#!/usr/bin/env perl
+# FIXME: was ist, wenn das gleiche file in zwei dirs liegt?
+use 5.014;
+use warnings;
+use strict;
+use utf8;
+use Getopt::Long;
+use Encode;
+use File::Basename;
+# FIXME: YAML::XS erlauben
+use YAML::Tiny qw /Load Dump/;
+
+binmode STDOUT, ':encoding(UTF-8)';
+binmode STDIN, ':encoding(UTF-8)';
+binmode STDERR, ':encoding(UTF-8)';
+
+my $prog_name = basename ($0);
+my $fallback_viewer = "evince";
+my $config_file = "$ENV{HOME}/.config/findbook.yml";
+my $search_all_formats = 0;
+my $viewer;
+my $help;
+
+my $config;
+my @dirs;
+my $have_formats = 0;
+my %format_hash;
+
+# parse commandline
+
+# FIXME: 'file' option für alternatives config file
+# FIXME: option für substring statt regex
+GetOptions ("viewer=s" => \$viewer,
+	    "all" => \$search_all_formats,
+	    "file" => \$config_file,
+	    "help" => \$help)
+    or exit 1;
+
+if ($help) {
+    state_help ();
+    exit 0;
+}
+
+if ($#ARGV  == -1) {
+    state_usage ();
+    die "error: need at least one argument\n";
+}
+$_ = decode ('utf8', $_) foreach (@ARGV);
+# FIXME: normalize unicode?
+# read in and parse configuration file
+
+$config = load_file ($config_file);
+
+die "config file must be a mapping\n" if !(ref $config eq "HASH");
+
+die "no search directory in config"  if !$config->{dirs};
+die "value of 'dirs' must be a list" if !(ref $config->{dirs} eq "ARRAY");
+@dirs = @{$config->{dirs}};
+die "value of 'dirs' must be a non-empty list" if scalar @dirs < 1;
+
+$fallback_viewer = $config->{"default-viewer"} if $config->{"default-viewer"};
+
+if ($config->{formats}) {
+    die "value of 'formats' must be a hash"
+	if (!(ref $config->{formats} eq "HASH"));
+    my %viewer_hash = %{$config->{formats}};
+    foreach my $key (keys %viewer_hash) {
+	foreach my $extension (@{$viewer_hash{$key}}) {
+	    die "file format '$extension' listed more than once in" .
+		" 'format' hash\n"
+		if $format_hash{$extension};
+	    $format_hash{$extension} = $key;
+	}
+    }
+    $have_formats = scalar keys %format_hash;
+    
+}
+    
+my @files;
+
+# glob for each file format
+
+if ($have_formats && !$search_all_formats) {
+    foreach my $format (keys %format_hash) {
+	foreach my $directory (@dirs) {
+	    push @files, glob ("\Q${directory}\E" . "/*" . "\Q${format}\E");
+	}
+    }
+}
+else {
+    foreach my $directory (@dirs) {
+	    push @files, glob ("\Q${directory}\E/*");
+    }
+}
+
+# FIXME
+# $_ = basename ($_) foreach @files;
+
+$_ = decode ('UTF-8', $_) foreach @files;
+
+# setup regexes
+
+eval {
+    # FIXME: option für case sensitiven match
+    @ARGV = map qr/$_/i, @ARGV
+};
+die "invalid regex: $@" if $@;
+
+# grep the list of filenames for each regexp
+
+foreach my $regex (@ARGV) {
+    # FIXME: only grep basename?
+    @files = grep /$regex/, @files;
+}
+
+# present the list of matching files to the user
+
+die "error: no book found\n" if $#files == -1;
+# FIXME: check for duplicate basenames
+say "[$_] ", basename ($files[$_]) for (0..$#files); 
+
+# get user input
+
+my $input;
+if ($#files == 0) {	# unique search result
+    $input = 0;
+}
+else {
+    say "press number 0-$#files or  q to quit";
+    $input = <STDIN>;
+    chomp($input);
+    exit 0 if $input =~ /\Aq\Z/;
+    $input = "0" if $input eq "";
+    die "error: number out of range\n" unless ( 0 <= $input && $input <= $#files);
+}
+
+if (!$viewer) {
+    # no command line option 'v' given.
+    # search the format hash for a viewer.
+    foreach my $format (keys %format_hash) {
+	if ($files[$input] =~ /\Q$format\E$/) {
+	    $viewer = $format_hash{$format}
+	}
+    }
+    if (!$viewer) {
+	$viewer = $fallback_viewer;
+    }
+}
+my @command = ($viewer, $files[$input]);
+system_wrapper (@command);
+
+sub system_wrapper {
+    say "command: @_";
+    system (@_) == 0
+	or die "error: system failed: $?\n"
+}
+
+sub state_usage {
+    say "Usage: $prog_name regex1 [regex2 ...]";
+}
+
+sub state_help {
+    state_usage ();
+        say "\nfind and view ebooks on your hard drive.\n
+OPTIONS
+
+  -v, --viewer=VIEWER         use VIEWER. overrides config file.
+  -a, --all                   list all file formats. Not only those specified
+                              in the configuration file
+  -f, --file=FILE             read configuration from FILE
+                              default: ~/.config/findbook.yml
+  -h, --help                  give this help screen
+
+CONFIGURATION
+
+mandatory configuration file with contents like this:
+-------------- ~/.config/findbook.yml --------------------
+# fallback viewer, only relevant if commandline option 'a' is given, or if the 
+# 'formats' hash (see below) is not given
+default-viewer: evince  
+
+# list of searched directories (mandatory)
+dirs:
+  - /home/simon/Bücher
+  - /home/simon/Bücher/papers
+
+# A list of file extensions for each viewer program
+formats:
+  evince:
+    - .pdf
+    - .djvu
+  okular:
+    - .epub
+------------- end of ~/.config/findbook.yml -------------- 
+";
+}
+
+# load YAML config file
+sub load_file {
+    my $filename = shift;
+    open my $fh, $filename
+	or die "Cannot open '$filename' for input:\n$!\n";
+    return Load ( decode('utf8', do { local $/; local $_ = <$fh>}));
+}

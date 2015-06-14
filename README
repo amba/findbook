@@ -1,0 +1,58 @@
+findbook: a simple script to find and view ebooks (and other content) on your
+hard drive.
+
+INSTALL
+
+you need one of the perl modules YAML::XS or YAML::Tiny.
+install with one of
+$ apt-get install perl-libyaml-libyaml
+$ yum install perl-YAML-LibYAML
+$ cpanm YAML::XS 
+
+OPTIONS
+
+  -v, --viewer=VIEWER         use VIEWER. overrides config file.
+  -a, --all                   list all file formats. Not only those specified
+                              in the configuration file
+  -f, --file=FILE             read configuration from FILE
+                              default: ~/.config/findbook.yml
+  -h, --help                  give this help screen
+
+CONFIGURATION
+
+mandatory configuration file with contents like this:
+-------------- ~/.config/findbook.yml --------------------
+# fallback viewer, only relevant if commandline option 'a' is given, or if the 
+# 'formats' hash (see below) is not given
+default-viewer: evince  
+
+# list of searched directories (mandatory)
+dirs:
+  - /home/simon/Bücher
+  - /home/simon/Bücher/papers
+
+# A list of file extensions for each viewer program
+formats:
+  evince:
+    - .pdf
+    - .djvu
+  okular:
+    - .epub
+------------- end of ~/.config/findbook.yml --------------
+
+COPYING
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Copyright (C) 2015 Simon Reinhardt

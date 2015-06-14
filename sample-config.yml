@@ -1,0 +1,18 @@
+# sample configration file. edit and copy to ~/.config/findbook.yml
+
+# fallback viewer, only relevant if commandline option 'a' is given, or if the 
+# 'formats' hash (see below) is not given
+default-viewer: evince  
+
+# list of searched directories (mandatory)
+dirs:
+  - /home/simon/Bücher
+  - /home/simon/Bücher/papers
+
+# A list of file extensions for each viewer program
+formats:
+  evince:
+    - .pdf
+    - .djvu
+  okular:
+    - .epub
