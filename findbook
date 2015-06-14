@@ -30,7 +30,7 @@ my %format_hash;
 # FIXME: option für substring statt regex
 GetOptions ("viewer=s" => \$viewer,
 	    "all" => \$search_all_formats,
-	    "file" => \$config_file,
+	    "file=s" => \$config_file,
 	    "help" => \$help)
     or exit 1;
 
