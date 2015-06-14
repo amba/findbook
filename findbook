@@ -6,8 +6,8 @@ use utf8;
 use Getopt::Long;
 use Encode;
 use File::Basename;
-# FIXME: YAML::XS erlauben
-use YAML::Tiny qw /Load Dump/;
+# FIXME: YAML::XS erlauben, dem sein Load will aber octets!
+use YAML::Tiny;
 
 binmode STDOUT, ':encoding(UTF-8)';
 binmode STDIN, ':encoding(UTF-8)';
