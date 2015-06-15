@@ -6,8 +6,12 @@ use utf8;
 use Getopt::Long;
 use Encode;
 use File::Basename;
-# FIXME: YAML::XS erlauben, dem sein Load will aber octets!
-use YAML::Tiny;
+
+# we prefer YAML::XS over YAML::Tiny
+my $have_yaml_xs = 0;
+eval 'use YAML::XS; $have_yaml_xs = 1; 1;'
+    or eval 'use YAML::Tiny; 1'
+    or die "error: no YAML module. See README for help.\n$@\n";
 
 binmode STDOUT, ':encoding(UTF-8)';
 binmode STDIN, ':encoding(UTF-8)';
@@ -43,7 +47,8 @@ if ($#ARGV  == -1) {
     state_usage ();
     die "error: need at least one argument\n";
 }
-$_ = decode ('utf8', $_) foreach (@ARGV);
+@ARGV = map decode ('utf8', $_), @ARGV;
+
 # FIXME: normalize unicode?
 # read in and parse configuration file
 
@@ -73,7 +78,7 @@ if ($config->{formats}) {
     $have_formats = scalar keys %format_hash;
     
 }
-    
+
 my @files;
 
 # glob for each file format
@@ -91,7 +96,7 @@ else {
     }
 }
 
-$_ = decode ('UTF-8', $_) foreach @files;
+@files = map decode ('UTF-8', $_), @files;
 
 # setup regexes
 
@@ -102,12 +107,10 @@ eval {
 die "invalid regex: $@" if $@;
 
 # grep the list of filenames for each regexp
-
+# FIXME: only grep basenames => option
 foreach my $regex (@ARGV) {
     @files = grep /$regex/, @files;
 }
-
-# present the list of matching files to the user
 
 die "error: no book found\n" if $#files == -1;
 
@@ -121,6 +124,8 @@ foreach (@files) {
     }
 }
 
+# present the list of matching files to the user
+
 if ($have_duplicates) {
     
     say "[$_] ", $files[$_] for (0..$#files); 
@@ -128,6 +133,7 @@ if ($have_duplicates) {
 else {    
     say "[$_] ", basename ($files[$_]) for (0..$#files); 
 }
+
 # get user input
 
 my $input;
@@ -140,7 +146,9 @@ else {
     chomp($input);
     exit 0 if $input =~ /\Aq\Z/;
     $input = "0" if $input eq "";
-    die "error: number out of range\n" unless ( 0 <= $input && $input <= $#files);
+    if ($input < 0 || $input > $#files) {
+	die "error: number out of range\n";
+    }
 }
 
 if (!$viewer) {
@@ -204,10 +212,17 @@ formats:
 ";
 }
 
-# load YAML config file
+# load YAML file
 sub load_file {
     my $filename = shift;
     open my $fh, $filename
 	or die "Cannot open '$filename' for input:\n$!\n";
-    return Load ( decode('utf8', do { local $/; local $_ = <$fh>}));
+    my $string = do { local $/; local $_ = <$fh>};
+    
+    if (!$have_yaml_xs) {
+	# YAML::Tiny's Load needs a perl unicode string 
+	$string = decode ('UTF-8', $string);
+    }
+    
+    return Load ($string);
 }
