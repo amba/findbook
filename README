@@ -1,6 +1,6 @@
 findbook: a simple script to find and view ebooks (and other content) on your
 hard drive.
-For a regular expression or fixed string given on the commandline,
+For a regular expression or fixed substring given on the commandline,
 findbook will search through the filenames in a preconfigured list of
 directories.
 The list of directories and the mapping of file formats to viewer programs

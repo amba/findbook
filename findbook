@@ -7,7 +7,7 @@ use Getopt::Long;
 use Encode;
 use File::Basename;
 use Unicode::Normalize qw/NFD/;
-#FIXME: --version option
+
 # we prefer YAML::XS over YAML::Tiny
 my $have_yaml_xs = 0;
 eval 'use YAML::XS; $have_yaml_xs = 1; 1;'
@@ -26,7 +26,8 @@ my $case_sensitive = 0;
 my $match_fixed_strings = 0;
 my $match_paths = 0;
 my $viewer;
-my $help;
+my $print_help;
+my $print_version;
 
 my $config;
 my @dirs;
@@ -41,11 +42,16 @@ GetOptions ("viewer=s" => \$viewer,
 	    "fixed-strings|F" => \$match_fixed_strings,
 	    "paths" => \$match_paths,
 	    "file=s" => \$config_file,
-	    "help" => \$help)
+	    "help" => \$print_help,
+	    "version|V" => \$print_version)
     or exit 1;
 
-if ($help) {
+if ($print_help) {
     state_help ();
+    exit 0;
+}
+if ($print_version) {
+    state_version ();
     exit 0;
 }
 
@@ -218,9 +224,8 @@ sub state_help {
     state_usage ();
         say "\nfind and view ebooks on your hard drive.\n
 FIXME: explain PATTERNS
-OPTIONS
 
-
+ options:
   -a, --all-formats           list all file formats, not only those given in
                               the configuration file.
   -F, --fixed-strings         match against fixed strings, not regular
@@ -232,30 +237,17 @@ OPTIONS
   -f, --file=FILE             read configuration from FILE.
                               default: ~/.config/findbook.yml
   -h, --help                  give this help screen.
+  -V, --version               print program version.
 
-CONFIGURATION
+FIXME: Report bugs to...";
+    
+}
 
-#FIXME: see README
-mandatory configuration file with contents like this:
--------------- ~/.config/findbook.yml --------------------
-# fallback viewer, only relevant if commandline option 'a' is given, or if the 
-# 'formats' hash (see below) is not given
-default-viewer: evince  
-
-# list of searched directories (mandatory)
-dirs:
-  - /home/simon/Bücher
-  - /home/simon/Bücher/papers
-
-# A list of file extensions for each viewer program
-formats:
-  evince:
-    - .pdf
-    - .djvu
-  okular:
-    - .epub
-------------- end of ~/.config/findbook.yml -------------- 
-";
+sub state_version {
+    say "findbook 0.1
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law."
 }
 
 # load YAML file
