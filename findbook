@@ -24,6 +24,7 @@ my $config_file = "$ENV{HOME}/.config/findbook.yml";
 my $search_all_formats = 0;
 my $case_sensitive = 0;
 my $match_fixed_strings = 0;
+my $match_paths = 0;
 my $viewer;
 my $help;
 
@@ -38,6 +39,7 @@ GetOptions ("viewer=s" => \$viewer,
 	    "all-formats" => \$search_all_formats,
 	    "case-sensitive|i" => \$case_sensitive,
 	    "fixed-strings|F" => \$match_fixed_strings,
+	    "paths" => \$match_paths,
 	    "file=s" => \$config_file,
 	    "help" => \$help)
     or exit 1;
@@ -53,7 +55,7 @@ if ($#ARGV  == -1) {
 }
 
  
-@ARGV = map decode ('utf8', $_), @ARGV;
+@ARGV = map NFD (decode ('utf8', $_)), @ARGV;
 
 # read in and parse configuration file
 
@@ -72,8 +74,8 @@ if ($config->{formats}) {
     die "value of 'formats' must be a hash"
 	if (!(ref $config->{formats} eq "HASH"));
     my %viewer_hash = %{$config->{formats}};
-    foreach my $key (keys %viewer_hash) {
-	foreach my $extension (@{$viewer_hash{$key}}) {
+    for my $key (keys %viewer_hash) {
+	for my $extension (@{$viewer_hash{$key}}) {
 	    die "file format '$extension' listed more than once in" .
 		" 'format' hash\n"
 		if $format_hash{$extension};
@@ -89,19 +91,30 @@ my @files;
 # glob for each file format
 
 if ($have_formats && !$search_all_formats) {
-    foreach my $format (keys %format_hash) {
-	foreach my $directory (@dirs) {
+    for my $format (keys %format_hash) {
+	for my $directory (@dirs) {
 	    push @files, glob ("\Q${directory}\E" . "/*" . "\Q${format}\E");
 	}
     }
 }
 else {
-    foreach my $directory (@dirs) {
+    for my $directory (@dirs) {
 	    push @files, glob ("\Q${directory}\E/*");
     }
 }
-
+# for each file we create a hashref with:
+# filename: unmodified file path
+# nfd_filename: canonical decomposition of filename;
+# basename: basename of nfd_filename
 @files = map decode ('UTF-8', $_), @files;
+@files = map {
+    my $nfd_filename = NFD ($_);
+    {
+	filename => $_,
+	nfd_filename => $nfd_filename,
+	basename => basename ($nfd_filename)
+    };
+} @files;
 
 # setup regular expressions
 
@@ -126,9 +139,15 @@ else {
 }
 
 # grep the list of filenames for each regexp
-# FIXME: only grep basenames => option ?
-foreach my $regex (@ARGV) {
-    @files = grep /$regex/, @files;
+for my $regex (@ARGV) {
+    @files = grep {
+	if ($match_paths) {
+	    $_->{nfd_filename} =~ /$regex/;
+	}
+	else {
+	    $_->{basename} =~ /$regex/;
+	}
+    } @files;
 }
 
 die "error: no book found\n" if $#files == -1;
@@ -136,8 +155,8 @@ die "error: no book found\n" if $#files == -1;
 # check for duplicate basenames
 my %duplicates;
 my $have_duplicates = 0;
-foreach (@files) {
-    if ($duplicates{basename ($_)}++) {
+for (@files) {
+    if ($duplicates{$_->{basename}}++) {
 	$have_duplicates = 1;
 	last;
     }
@@ -147,10 +166,10 @@ foreach (@files) {
 
 if ($have_duplicates) {
     
-    say "[$_] ", $files[$_] for (0..$#files); 
+    say "[$_] ", $files[$_]{filename} for (0..$#files); 
 }
 else {    
-    say "[$_] ", basename ($files[$_]) for (0..$#files); 
+    say "[$_] ", $files[$_]{basename} for (0..$#files); 
 }
 
 # get user input
@@ -173,8 +192,8 @@ else {
 if (!$viewer) {
     # no command line option 'v' given.
     # search the format hash for a viewer.
-    foreach my $format (keys %format_hash) {
-	if ($files[$input] =~ /\Q$format\E$/) {
+    for my $format (keys %format_hash) {
+	if ($files[$input]{filename} =~ /\Q$format\E$/) {
 	    $viewer = $format_hash{$format}
 	}
     }
@@ -182,7 +201,7 @@ if (!$viewer) {
 	$viewer = $fallback_viewer;
     }
 }
-my @command = ($viewer, $files[$input]);
+my @command = ($viewer, $files[$input]{filename});
 system_wrapper (@command);
 
 sub system_wrapper {
@@ -207,6 +226,7 @@ OPTIONS
   -F, --fixed-strings         match against fixed strings, not regular
                               expressions.        
   -i, --case-sensitive        do not ignore case distinctions in filenames.
+  -p, --paths                 match against full paths, not basenames.
   -v, --viewer=VIEWER         use VIEWER. overrides the config file.
 
   -f, --file=FILE             read configuration from FILE.

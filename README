@@ -1,32 +1,32 @@
 findbook: a simple script to find and view ebooks (and other content) on your
 hard drive.
+For a regular expression or fixed string given on the commandline,
+findbook will search through the filenames in a preconfigured list of
+directories.
+The list of directories and the mapping of file formats to viewer programs
+is specified in a handy YAML configuration file.
 
 INSTALL
 
-you need one of the perl modules YAML::XS or YAML::Tiny.
+you need either one of the perl modules YAML::XS or YAML::Tiny.
 install with one of
 $ apt-get install perl-libyaml-libyaml
 $ yum install perl-YAML-LibYAML
 $ cpanm YAML::XS 
 
-OPTIONS
+USAGE
 
-  -v, --viewer=VIEWER         use VIEWER. overrides config file.
-  -a, --all                   list all file formats. Not only those specified
-                              in the configuration file
-  -f, --file=FILE             read configuration from FILE
-                              default: ~/.config/findbook.yml
-  -h, --help                  give this help screen
+Type ./findbook --help to get a list of commandline options.
 
 CONFIGURATION
 
-mandatory configuration file with contents like this:
+You need a configuration file with contents like this:
 -------------- ~/.config/findbook.yml --------------------
 # fallback viewer, only relevant if commandline option 'a' is given, or if the 
 # 'formats' hash (see below) is not given
 default-viewer: evince  
 
-# list of searched directories (mandatory)
+# list of searched directories (this is the only mandatory key)
 dirs:
   - /home/simon/Bücher
   - /home/simon/Bücher/papers
@@ -39,6 +39,7 @@ formats:
   okular:
     - .epub
 ------------- end of ~/.config/findbook.yml --------------
+
 
 COPYING
 
