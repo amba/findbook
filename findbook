@@ -6,7 +6,8 @@ use utf8;
 use Getopt::Long;
 use Encode;
 use File::Basename;
-
+use Unicode::Normalize qw/NFD/;
+#FIXME: --version option
 # we prefer YAML::XS over YAML::Tiny
 my $have_yaml_xs = 0;
 eval 'use YAML::XS; $have_yaml_xs = 1; 1;'
@@ -21,6 +22,8 @@ my $prog_name = basename ($0);
 my $fallback_viewer = "evince";
 my $config_file = "$ENV{HOME}/.config/findbook.yml";
 my $search_all_formats = 0;
+my $case_sensitive = 0;
+my $match_fixed_strings = 0;
 my $viewer;
 my $help;
 
@@ -31,9 +34,10 @@ my %format_hash;
 
 # parse commandline
 
-# FIXME: option für substring statt regex
 GetOptions ("viewer=s" => \$viewer,
-	    "all" => \$search_all_formats,
+	    "all-formats" => \$search_all_formats,
+	    "case-sensitive|i" => \$case_sensitive,
+	    "fixed-strings|F" => \$match_fixed_strings,
 	    "file=s" => \$config_file,
 	    "help" => \$help)
     or exit 1;
@@ -47,9 +51,10 @@ if ($#ARGV  == -1) {
     state_usage ();
     die "error: need at least one argument\n";
 }
+
+ 
 @ARGV = map decode ('utf8', $_), @ARGV;
 
-# FIXME: normalize unicode?
 # read in and parse configuration file
 
 $config = load_file ($config_file);
@@ -98,16 +103,30 @@ else {
 
 @files = map decode ('UTF-8', $_), @files;
 
-# setup regexes
+# setup regular expressions
 
-eval {
-    # FIXME: option für case sensitiven match
-    @ARGV = map qr/$_/i, @ARGV
-};
-die "invalid regex: $@" if $@;
+if ($match_fixed_strings) {
+    if ($case_sensitive) {
+	@ARGV = map qr/\Q$_\E/, @ARGV;
+    }
+    else {
+	@ARGV = map qr/\Q$_\E/i, @ARGV;
+    }
+}
+else {
+    eval {
+	if ($case_sensitive) {
+	    @ARGV = map qr/$_/, @ARGV;
+	}
+	else {
+	    @ARGV = map qr/$_/i, @ARGV;
+	}
+    };
+    die "invalid regex: $@" if $@;
+}
 
 # grep the list of filenames for each regexp
-# FIXME: only grep basenames => option
+# FIXME: only grep basenames => option ?
 foreach my $regex (@ARGV) {
     @files = grep /$regex/, @files;
 }
@@ -173,23 +192,30 @@ sub system_wrapper {
 }
 
 sub state_usage {
-    say "Usage: $prog_name [OPTIONS] regex1 [regex2 ...]";
+    say "Usage: $prog_name [OPTIONS] PATTERN1 [PATTERN2 ...]";
 }
 
 sub state_help {
     state_usage ();
         say "\nfind and view ebooks on your hard drive.\n
+FIXME: explain PATTERNS
 OPTIONS
 
-  -v, --viewer=VIEWER         use VIEWER. overrides config file.
-  -a, --all                   list all file formats. Not only those specified
-                              in the configuration file
-  -f, --file=FILE             read configuration from FILE
+
+  -a, --all-formats           list all file formats, not only those given in
+                              the configuration file.
+  -F, --fixed-strings         match against fixed strings, not regular
+                              expressions.        
+  -i, --case-sensitive        do not ignore case distinctions in filenames.
+  -v, --viewer=VIEWER         use VIEWER. overrides the config file.
+
+  -f, --file=FILE             read configuration from FILE.
                               default: ~/.config/findbook.yml
-  -h, --help                  give this help screen
+  -h, --help                  give this help screen.
 
 CONFIGURATION
 
+#FIXME: see README
 mandatory configuration file with contents like this:
 -------------- ~/.config/findbook.yml --------------------
 # fallback viewer, only relevant if commandline option 'a' is given, or if the 
