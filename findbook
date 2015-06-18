@@ -30,7 +30,7 @@ my $print_help = 0;
 my $print_version = 0;
 
 my $config;
-my @dirs;
+my @dirs = ();
 my $have_formats = 0;
 my %format_hash;
 
@@ -42,6 +42,7 @@ GetOptions ("viewer|v=s" => \$viewer,
 	    "case-sensitive|i" => \$case_sensitive,
 	    "fixed-strings|F" => \$match_fixed_strings,
 	    "paths|p" => \$match_paths,
+	    "directory|d=s" => \@dirs,
 	    "file|f=s" => \$config_file,
 	    "help|h" => \$print_help,
 	    "version|V" => \$print_version)
@@ -69,12 +70,12 @@ if ($#ARGV  == -1) {
 $config = load_file ($config_file);
 
 die "config file must be a mapping\n" if !(ref $config eq "HASH");
-
-die "no search directory in config"  if !$config->{dirs};
-die "value of 'dirs' must be a list" if !(ref $config->{dirs} eq "ARRAY");
-@dirs = @{$config->{dirs}};
-die "value of 'dirs' must be a non-empty list" if scalar @dirs < 1;
-
+if (! @dirs) {
+    die "no search directory in config"  if !$config->{dirs};
+    die "value of 'dirs' must be a list" if !(ref $config->{dirs} eq "ARRAY");
+    @dirs = @{$config->{dirs}};
+    die "value of 'dirs' must be a non-empty list" if scalar @dirs < 1;
+}
 $fallback_viewer = $config->{"default-viewer"} if $config->{"default-viewer"};
 
 if ($config->{formats}) {
@@ -97,6 +98,7 @@ my @files;
 
 # glob for each file format
 
+# FIXME: glob formats with "{}"
 if ($have_formats && !$search_all_formats) {
     for my $format (keys %format_hash) {
 	for my $directory (@dirs) {
@@ -226,7 +228,7 @@ sub state_help {
         say "\nfind and view ebooks on your hard drive.\n
 FIXME: explain PATTERNS
 
- options:
+ Options:
   -a, --all-formats           list all file formats, not only those given in
                               the configuration file.
   -F, --fixed-strings         match against fixed strings, not regular
@@ -235,6 +237,10 @@ FIXME: explain PATTERNS
   -p, --paths                 match against full paths, not basenames.
   -v, --viewer=VIEWER         use VIEWER. overrides the config file.
 
+  -d, --directory=DIR         search DIR, not the ones in the configuration
+                              file. You can repeat this option, like 
+                              ' -d DIR1 -d DIR2 ...' to search multiple
+                              directories.
   -f, --file=FILE             read configuration from FILE.
                               default: ~/.config/findbook.yml
   -h, --help                  give this help screen.
