@@ -6,6 +6,7 @@ use utf8;
 use Getopt::Long qw/:config no_ignore_case bundling/;
 use Encode;
 use File::Basename;
+use File::Glob ':bsd_glob';
 use Unicode::Normalize qw/NFD/;
 
 # we prefer YAML::XS over YAML::Tiny
@@ -25,6 +26,8 @@ my $search_all_formats = 0;
 my $case_sensitive = 0;
 my $match_fixed_strings = 0;
 my $match_paths = 0;
+my $use_glob = 0;
+my $argv0;
 my $viewer = '';
 my $print_help = 0;
 my $print_version = 0;
@@ -36,12 +39,14 @@ my %format_hash;
 
 # parse commandline
 
-#FIXME: dirs option with array ref
+@ARGV = map decode ('UTF-8', $_), @ARGV;
+
 GetOptions ("viewer|v=s" => \$viewer,
 	    "all-formats|a" => \$search_all_formats,
 	    "case-sensitive|i" => \$case_sensitive,
 	    "fixed-strings|F" => \$match_fixed_strings,
 	    "paths|p" => \$match_paths,
+	    "glob|g" => \$use_glob,
 	    "directory|d=s" => \@dirs,
 	    "file|f=s" => \$config_file,
 	    "help|h" => \$print_help,
@@ -59,11 +64,15 @@ if ($print_version) {
 
 if ($#ARGV  == -1) {
     state_usage ();
-    die "error: need at least one argument\n";
+    die "error: need at least one non-option argument\n";
 }
 
- 
-@ARGV = map NFD (decode ('utf8', $_)), @ARGV;
+if ($use_glob) {
+    # do not run $ARGV[0] through NFD ()
+    $argv0 = shift @ARGV;
+}
+
+@ARGV = map NFD ($_), @ARGV;
 
 # read in and parse configuration file
 
@@ -97,20 +106,33 @@ if ($config->{formats}) {
 my @files;
 
 # glob for each file format
-
-# FIXME: glob formats with "{}"
+my $format_glob = '';
 if ($have_formats && !$search_all_formats) {
-    for my $format (keys %format_hash) {
-	for my $directory (@dirs) {
-	    push @files, glob ("\Q${directory}\E" . "/*" . "\Q${format}\E");
+    my @formats = map quotemeta, keys %format_hash;
+    $format_glob = "{" . join (',', @formats) . "}";
+}
+
+for my $directory (@dirs) {
+    if ($use_glob) {
+	# use bsd_glob
+	my $glob = "${directory}/*${argv0}*";
+	
+	push @files, bsd_glob ($glob, GLOB_BRACE | GLOB_QUOTE
+			       | ($case_sensitive ? 0 : GLOB_NOCASE));
+	say "glob: '$glob', number: $#files";
+	if (GLOB_ERROR) {
+	    die "error from bsd_glob: $!\n";
 	}
+	
+	# we did not glob for the formats, because time of the glob seems to
+	# increase linear with the number of formats. Instead we will later
+	# add them to @ARGV. 
+    }
+    else {
+	push @files, glob ("\Q${directory}\E/*${format_glob}");
     }
 }
-else {
-    for my $directory (@dirs) {
-	    push @files, glob ("\Q${directory}\E/*");
-    }
-}
+
 # for each file we create a hashref with:
 # filename: unmodified file path
 # nfd_filename: canonical decomposition of filename;
@@ -146,6 +168,16 @@ else {
     };
     die "invalid regex: $@" if $@;
 }
+
+
+if ($use_glob && $have_formats && !$search_all_formats) {
+    my @formats = map quotemeta, keys %format_hash;
+    my $regex = "(?:" . join ('|', @formats) . ')$';
+    say "regex: ", qr/$regex/;
+    # this should always be case sensitive
+    push @ARGV, qr/$regex/;
+}
+
 
 # grep the list of filenames for each regexp
 for my $regex (@ARGV) {
@@ -225,10 +257,17 @@ sub state_usage {
 
 sub state_help {
     state_usage ();
-        say "\nfind and view ebooks on your hard drive.\n
-FIXME: explain PATTERNS
+        say "
+find and view ebooks on your hard drive.
+
+List all filenames matching each of the regular expressions PATTERN*. 
+The user can then select and view one of the matching files.
 
  Options:
+  -g, --glob                  speed up operation by using PATTERN1 as a glob
+                              like this: \"\$DIR/*\$PATTERN1*\". See
+                              'perldoc File::Glob' for the list of allowed meta
+                              characters.
   -a, --all-formats           list all file formats, not only those given in
                               the configuration file.
   -F, --fixed-strings         match against fixed strings, not regular
