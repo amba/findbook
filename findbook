@@ -75,7 +75,7 @@ if ($use_glob) {
 @ARGV = map NFD ($_), @ARGV;
 
 # read in and parse configuration file
-
+# FIXME: config for case sensitive and glob
 $config = load_file ($config_file);
 
 die "config file must be a mapping\n" if !(ref $config eq "HASH");
