@@ -38,6 +38,12 @@ formats:
     - .djvu
   okular:
     - .epub
+
+# A list of local/remote directory pairs used by --push and --pull
+sync:
+  /home/simon/Bücher/: vserver:~/Bücher/
+  /home/simon/Bücher/: uni:~/Bücher/
+
 ------------- end of ~/.config/findbook.yml --------------
 
 

@@ -32,6 +32,9 @@ my $argv0;
 my $viewer = '';
 my $print_help = 0;
 my $print_version = 0;
+my $push = 0;
+my $pull = 0;
+
 
 my $config;
 my @dirs = ();
@@ -42,6 +45,46 @@ my %format_hash;
 
 @ARGV = map decode ('UTF-8', $_), @ARGV;
 
+sub state_usage {
+    say "Usage: $prog_name [OPTIONS] PATTERN1 [PATTERN2 ...]";
+}
+
+sub state_help {
+    state_usage ();
+        say "
+find and view ebooks on your hard drive.
+
+List all filenames matching each of the regular expressions PATTERN*. 
+The user can then select and view one of the matching files.
+
+ Options:
+  -g, --glob                  speed up operation by using PATTERN1 as a glob
+                              like this: \"\$DIR/*\$PATTERN1*\". See
+                              'perldoc File::Glob' for the list of allowed meta
+                              characters.
+  -a, --all-formats           list all file formats, not only those given in
+                              the configuration file.
+  -F, --fixed-strings         match against fixed strings, not regular
+                              expressions.        
+  -i, --case-sensitive        do not ignore case distinctions in filenames.
+  -p, --paths                 match against full paths, not basenames.
+  -v, --viewer=VIEWER         use VIEWER. overrides the config file.
+
+  -d, --directory=DIR         search DIR, not the ones in the configuration
+                              file. You can repeat this option, like 
+                              ' -d DIR1 -d DIR2 ...' to search multiple
+                              directories.
+  -f, --file=FILE             read configuration from FILE.
+                              default: ~/.config/findbook.yml
+      --pull                  sync with a remote directory.
+      --push                                    
+  -h, --help                  give this help screen.
+  -V, --version               print program version.
+
+FIXME: Report bugs to...";
+    
+}
+
 GetOptions ("viewer|v=s" => \$viewer,
 	    "all-formats|a" => \$search_all_formats,
 	    "case-sensitive|i" => \$case_sensitive,
@@ -51,8 +94,10 @@ GetOptions ("viewer|v=s" => \$viewer,
 	    "directory|d=s" => \@dirs,
 	    "file|f=s" => \$config_file,
 	    "help|h" => \$print_help,
-	    "version|V" => \$print_version)
-    or exit 1;
+	    "version|V" => \$print_version,
+	    "push" => \$push,
+	    "pull" => \$pull,
+    )    or exit 1;
 
 if ($print_help) {
     state_help ();
@@ -63,7 +108,7 @@ if ($print_version) {
     exit 0;
 }
 
-if ($#ARGV  == -1) {
+if (!($push || $pull) && ($#ARGV  == -1)) {
     state_usage ();
     die "error: need at least one non-option argument\n";
 }
@@ -79,10 +124,42 @@ if ($use_glob) {
 # FIXME: config for case sensitive and glob
 $config = load_file ($config_file);
 
-die "config file must be a mapping\n" if !(ref $config eq "HASH");
+sub is_hash {
+    my $ref = shift;
+    return ref $ref eq "HASH";
+}
+
+sub is_array {
+    my $ref = shift;
+    return ref $ref eq "ARRAY";
+}
+
+
+die "config file must be a mapping\n" if !is_hash ($config);
+
+if ($push || $pull) {
+    die "value of 'sync' must be a hash" if ! is_hash ($config->{sync});
+    my %sync_hash = %{$config->{sync}};
+    foreach my $local_dir (keys %sync_hash) {
+	my $remote = $sync_hash{$local_dir};
+	die "remote not a scalar" if ref $remote;
+	my @command = qw/rsync -azP/;
+	say "push: $push, pull: $pull";
+	if ($push) {
+	    push @command, $local_dir, $remote;
+	}
+	else {
+	    push @command, ($remote, $local_dir);
+	}
+	
+	system_wrapper (@command);
+    }
+    exit 0;
+}
+    
 if (! @dirs) {
     die "no search directory in config"  if !$config->{dirs};
-    die "value of 'dirs' must be a list" if !(ref $config->{dirs} eq "ARRAY");
+    die "value of 'dirs' must be a list" if !is_array ($config->{dirs});
     @dirs = @{$config->{dirs}};
     die "value of 'dirs' must be a non-empty list" if scalar @dirs < 1;
 }
@@ -90,7 +167,7 @@ $fallback_viewer = $config->{"default-viewer"} if $config->{"default-viewer"};
 
 if ($config->{formats}) {
     die "value of 'formats' must be a hash"
-	if (!(ref $config->{formats} eq "HASH"));
+	if !is_hash ($config->{formats});
     my %viewer_hash = %{$config->{formats}};
     for my $key (keys %viewer_hash) {
 	for my $extension (@{$viewer_hash{$key}}) {
@@ -252,43 +329,7 @@ sub system_wrapper {
 	or die "error: system failed: $?\n"
 }
 
-sub state_usage {
-    say "Usage: $prog_name [OPTIONS] PATTERN1 [PATTERN2 ...]";
-}
 
-sub state_help {
-    state_usage ();
-        say "
-find and view ebooks on your hard drive.
-
-List all filenames matching each of the regular expressions PATTERN*. 
-The user can then select and view one of the matching files.
-
- Options:
-  -g, --glob                  speed up operation by using PATTERN1 as a glob
-                              like this: \"\$DIR/*\$PATTERN1*\". See
-                              'perldoc File::Glob' for the list of allowed meta
-                              characters.
-  -a, --all-formats           list all file formats, not only those given in
-                              the configuration file.
-  -F, --fixed-strings         match against fixed strings, not regular
-                              expressions.        
-  -i, --case-sensitive        do not ignore case distinctions in filenames.
-  -p, --paths                 match against full paths, not basenames.
-  -v, --viewer=VIEWER         use VIEWER. overrides the config file.
-
-  -d, --directory=DIR         search DIR, not the ones in the configuration
-                              file. You can repeat this option, like 
-                              ' -d DIR1 -d DIR2 ...' to search multiple
-                              directories.
-  -f, --file=FILE             read configuration from FILE.
-                              default: ~/.config/findbook.yml
-  -h, --help                  give this help screen.
-  -V, --version               print program version.
-
-FIXME: Report bugs to...";
-    
-}
 
 sub state_version {
     say "findbook 0.1
@@ -311,3 +352,4 @@ sub load_file {
     
     return Load ($string);
 }
+
