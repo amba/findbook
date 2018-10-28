@@ -21,7 +21,8 @@ binmode STDIN, ':encoding(UTF-8)';
 binmode STDERR, ':encoding(UTF-8)';
 
 # kchmviewer fails for german locale
-$ENV{LANG} = undef;
+#$ENV{LANG} = undef;
+
 my $prog_name = basename ($0);
 my $fallback_viewer = "evince";
 my $config_file = "$ENV{HOME}/.config/findbook.yml";
